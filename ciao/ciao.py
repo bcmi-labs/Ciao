@@ -97,8 +97,10 @@ elif board_model == "ARDUINO TIAN":
 	logger.info("Ciao MCU Connection started via serial")
 
 #we start MANAGED connectors after ciaoserver (so they can register properly)
+core_version = settings.conf["core"]
+
 for connector, connector_conf in settings.conf['connectors'].items():
-	core_version = settings.conf["core"]
+	#core_version = settings.conf["core"]
 	required_version = connector_conf['core'] if "core" in connector_conf else ">=0.0.0"
 
 	if not ( check_version(required_version, core_version) ):
@@ -109,6 +111,17 @@ for connector, connector_conf in settings.conf['connectors'].items():
 		# it can register only if listed in shd
 		shd[connector].start()
 
+'''
+def __attach_connector(connector_name):
+	connector_conf = settings.conf['connectors'][connector_name]
+	required_version = connector_conf['core'] if "core" in connector_conf else ">=0.0.0"
+
+	if not ( check_version(required_version, core_version) ):
+		logger.error("Required version of Ciao Core [%s] for the connector %s is not compatible with the working Core version [%s]" %(required_version, connector, core_version ))
+	else:
+		shd[connector_name] = CiaoConnector(connector_name, connector_conf, mcu)
+		shd[connector_name].start()
+'''
 #TODO: maybe we can start another thread to control Ciao Core status
 #logger.warning(shd)
 #variable to "mantain control" over while loop
