@@ -196,3 +196,12 @@ def __compare(v1, v2):
 	def normalize(v):
 		return [int(x) for x in re.sub(r'(\.0+)*$','', v).split(".")]
 	return cmp(normalize(v1), normalize(v2))
+
+def kill_connectors_by_pids():
+	import fnmatch
+	for ciaofile in os.listdir('/var/run/'):
+		if fnmatch.fnmatch(ciaofile, '*ciao.pid'):
+			cf = open('/var/run/'+ciaofile, "r")
+			pid = cf.readline()
+			os.system("kill -9 " + pid)
+			os.remove(cf.name)

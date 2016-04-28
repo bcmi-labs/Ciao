@@ -72,6 +72,9 @@ shd = {}
 #get the board model from cpuinfo
 board_model = get_board_model()
 
+#kill previous connectors
+kill_connectors_by_pids()
+
 #start ciaoserver thread (to interact with connectors)
 server = Thread(name="server", target=ciaoserver.init, args=(settings.conf,shd,))
 server.daemon = True
@@ -81,7 +84,7 @@ mcu = None
 
 if board_model == "ARDUINO YUN":
 	logger.debug("Ciao MCU Connection starting via standard output")
-	mcu = ciaomcu.StdOut(settings, logger)
+	mcu = ciaomcu.StdIO(settings, logger)
 	mcu.start()
 	logger.info("Ciao MCU Connection started via standard output")
 
@@ -104,8 +107,6 @@ for connector, connector_conf in settings.conf['connectors'].items():
 		shd[connector] = CiaoConnector(connector, connector_conf, mcu)
 		# connector must start after it has been added to shd,
 		# it can register only if listed in shd
-		if board_model == "ARDUINO TIAN":
-			shd[connector].stop() ## kills eventually old connectors instances
 		shd[connector].start()
 
 #TODO: maybe we can start another thread to control Ciao Core status
@@ -118,14 +119,13 @@ signal.signal(signal.SIGINT, signal_handler) #ctrl+c
 signal.signal(signal.SIGHUP, signal_handler) #SIGHUP - 1
 signal.signal(signal.SIGTERM, signal_handler) #SIGTERM - 15
 
+# Before start reading from micro controller, flushes data and cleans the buffer.
+# Usually mcu starts to write into buffer before ciao begins to read.
+mcu.flush()
+
 while keepcycling:
 	try:
-		#reading from input device
-		rec_cmd = mcu.read()
-		if not rec_cmd is None:
-			cmd = clean_command(rec_cmd)
-		else:
-			cmd = rec_cmd
+		cmd = clean_command(mcu.read())
 	except KeyboardInterrupt, e:
 		logger.warning("SIGINT received")
 	except IOError, e:
@@ -135,8 +135,10 @@ while keepcycling:
 			logger.debug("command: %s" % cmd)
 			connector, action = is_valid_command(cmd)
 			if connector == False:
-				logger.warning("unknown command: %s" % cmd)
-				mcu.write(-1, "unknown_command")
+				if cmd != "run-ciao":
+					logger.warning("unknow command: %s" % cmd)
+					mcu.write(-1, "unknown_command")
+				# else : in this case ciao.py received run-ciao and it must discard the commands
 			elif connector == "ciao": #internal commands
 				params = cmd.split(";",2)
 				if len(params) != 3:
