@@ -70,7 +70,6 @@ class CiaoThread(Thread, asyncore.dispatcher_with_send):
 			if "port" in self.shd['conf']['ciao']:
 				self.port = self.shd['conf']['ciao']['port']
 
-
 		# setup logger
 		self.logger = logging.getLogger(self.name)
 
@@ -197,12 +196,9 @@ class CiaoThread(Thread, asyncore.dispatcher_with_send):
 
 class BaseConnector:
 
-	def __init__(self, name, logger, ciao_conf):
+	def __init__(self, name, logger, ciao_conf, asynchronous = True):
 		# connector name, used also in ciao library (mcu) to indentify the connector, it will be the same
 		self.name = name # probabilmente se lo puo caricare direttamente dal file di configurazione.
-
-		# the current working directory (or basepath) of the connector
-		#self.__cwd = cwd
 
 		# handler to trigger when data from ciao core are available.
 		self.__handler = {}
@@ -212,6 +208,9 @@ class BaseConnector:
 
 		# it's a queue which stores commands/data/messages directed to the ciao core and then to the mcu.
 		self.__queue_to_core = Queue()
+
+		# specify if the data from core/mcu will handled synchronously or asynchronously, by default is asynchronous
+		self.__asynchronous = asynchronous
 
 		# conf object which stores data of the configuration file
 		#self.__conf = json.loads( open(self.__cwd + name + ".json.conf" ).read())
@@ -252,17 +251,18 @@ class BaseConnector:
 		signal.signal(signal.SIGHUP, self.__signal_handler)
 		signal.signal(signal.SIGTERM, self.__signal_handler)
 
-		while self.__shared["loop"]:
-			if not self.__queue_to_connector.empty():
-				entry = self.__queue_to_connector.get()
-				self.__logger.info("Entry %s" % entry)
-				#trigger
-				self.__pre_handling(entry)
+		if self.__asynchronous:
+			while self.__shared["loop"]:
+				if not self.__queue_to_connector.empty():
+					entry = self.__queue_to_connector.get()
+					self.__logger.info("Entry %s" % entry)
+					#trigger
+					self.__pre_handling(entry)
 
-			# the sleep is really useful to prevent ciao to cap all CPU
-			# this could be increased/decreased (keep an eye on CPU usage)
-			# time.sleep is MANDATORY to make signal handlers work (they are synchronous in python)
-			time.sleep(0.01) ##rendere configurabile
+				# the sleep is really useful to prevent ciao to cap all CPU
+				# this could be increased/decreased (keep an eye on CPU usage)
+				# time.sleep is MANDATORY to make signal handlers work (they are synchronous in python)
+				time.sleep(0.01) ##rendere configurabile
 
 	# creates a forked process and writes its pid number into a file,
 	# used by the ciao core to kill the process
@@ -290,9 +290,13 @@ class BaseConnector:
 	def send(self, entry):
 		self.__queue_to_core.put(entry)
 
-	# register the handler for get data back from the core (arduino/mcu)
-	def receive(self, handler):
-		self.__handler = handler
+	# receive data back from the core (arduino/mcu), in a sync or async way,
+	# depends on handler function and asynchronous argument
+	def receive(self, handler = None):
+		if handler is None and self.__asynchronous :
+			self.__handler = handler
+		else :
+			return self.__queue_to_connector.get()
 
 	def __pre_handling(self, entry):
 		for index, item in enumerate(entry["data"]):
