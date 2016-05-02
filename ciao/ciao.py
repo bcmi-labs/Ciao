@@ -110,6 +110,7 @@ for connector, connector_conf in settings.conf['connectors'].items():
 		# connector must start after it has been added to shd,
 		# it can register only if listed in shd
 		shd[connector].start()
+		#__attach_connector(connector)
 
 '''
 def __attach_connector(connector_name):
@@ -122,6 +123,7 @@ def __attach_connector(connector_name):
 		shd[connector_name] = CiaoConnector(connector_name, connector_conf, mcu)
 		shd[connector_name].start()
 '''
+
 #TODO: maybe we can start another thread to control Ciao Core status
 #logger.warning(shd)
 #variable to "mantain control" over while loop
@@ -171,6 +173,14 @@ while keepcycling:
 				mcu.write(-1, "connector_not_runnable")
 			else:
 				shd[connector].run(action, cmd)
+				'''
+				if not connector in shd:
+					__attach_connector(connector)
+					mcu.write(0, "no_connector")
+				else:
+					shd[connector].run(action, cmd)
+				'''
+
 
 		# the sleep is really useful to prevent ciao to "cap" all CPU
 		# this could be increased/decreased (keep an eye on CPU usage)

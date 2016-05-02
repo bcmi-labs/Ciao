@@ -142,7 +142,7 @@ logger = ciaotools.get_logger(name, logconf=log_config, logdir=working_dir)
 # CALL BASE CONNECTOR
 
 #Call a base connector object to help connection to ciao core
-ciao_connector = ciaotools.BaseConnector(name, logger, config["ciao"])
+ciao_connector = ciaotools.BaseConnector(name, logger, config["ciao"],async=True)
 
 #register an handler to manage data from core/mcu
 ciao_connector.receive(handler)
