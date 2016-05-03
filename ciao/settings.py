@@ -32,7 +32,7 @@ basepath = os.path.dirname(os.path.abspath(__file__)) + os.sep
 
 #configuration dictionary
 conf = {
-	"core" : "0.0.2",
+	"core" : "0.1.0",
 	"server": {
 		"host" : "localhost",
 		"port" : 8900
@@ -114,7 +114,7 @@ def load_connectors(logger):
 	else:
 		conf['connectors'] = {}
 		for conf_file in conf_list:
-			if conf_file.endswith(".json.conf"):
+			if conf_file.endswith("ciao.json.conf"):
 				try:
 					conf_json = open(conf_path + conf_file).read()
 					conf_plain = json.loads(conf_json)
@@ -122,7 +122,7 @@ def load_connectors(logger):
 						connector_name = conf_plain['name']
 					else:
 						logger.debug("Missing connector name in configuration file(%s)" % conf_file)
-						connector_name = conf_file[:-len(".json.conf")]
+						connector_name = conf_file[:-len(".ciao.json.conf")]
 					if "enabled" in conf_plain and conf_plain['enabled']:
 						conf['connectors'][connector_name] = conf_plain
 						logger.debug("Loaded configuration for %s connector" % connector_name)
