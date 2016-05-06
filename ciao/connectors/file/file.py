@@ -57,11 +57,11 @@ def read_file(file_path, chk):
 		lines = f.read()
 
 		f.close()
-		entry = {
+		mcu_res = {
 			"checksum" : chk,
 			"data" : [file_path, lines]
 		}
-		ciao_connector.send(entry)
+		ciao_connector.send(mcu_res)
 
 def get_file(mod, file_path):
 	'''
@@ -98,23 +98,23 @@ def get_file(mod, file_path):
 	except Exception, e:
 		logger.error(e)
 
-def handler(entry):
-	if entry["type"] == "out":
+def handler(mcu_req):
+	if mcu_req["type"] == "out":
 		#entry["data"][0] # file path
 		#entry["data"][1] # file content
 		#entry["data"][2] # access mode (optional, default 'w')
 
 		# if access mode is not specified, set default write access mode by configuration file
-		if len(entry["data"]) <= 2:
-			entry["data"].append( file_wam )
+		if len(mcu_req["data"]) <= 2:
+			mcu_req["data"].append( file_wam )
 
-		logger.debug(entry)
+		logger.debug(mcu_req)
 
-		write_file(entry["data"][0], entry["data"][1], entry["data"][2])
+		write_file(mcu_req["data"][0], mcu_req["data"][1], mcu_req["data"][2])
 
-	elif entry["type"] == "result":
+	elif mcu_req["type"] == "result":
 		#entry["data"][0] # file path
-		read_file(entry["data"][0], str(entry['checksum']))
+		read_file(mcu_req["data"][0], str(mcu_req['checksum']))
 
 # the absolute path of the connector
 working_dir = os.path.dirname(os.path.abspath(__file__)) + os.sep
