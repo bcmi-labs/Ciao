@@ -26,7 +26,8 @@
 #
 ###
 
-import ciaotools, os
+import ciaotools as ciao
+import os
 
 # DEFINE CONNECTOR HANDLERS AND FUNCTIONS
 write_modes = ["a","w"]
@@ -100,15 +101,13 @@ def get_file(mod, file_path):
 
 def handler(mcu_req):
 	if mcu_req["type"] == "out":
-		#entry["data"][0] # file path
-		#entry["data"][1] # file content
-		#entry["data"][2] # access mode (optional, default 'w')
+		#mcu_req["data"][0] # file path
+		#mcu_req["data"][1] # file content
+		#mcu_req["data"][2] # access mode (optional, default 'w')
 
 		# if access mode is not specified, set default write access mode by configuration file
 		if len(mcu_req["data"]) <= 2:
 			mcu_req["data"].append( file_wam )
-
-		logger.debug(mcu_req)
 
 		write_file(mcu_req["data"][0], mcu_req["data"][1], mcu_req["data"][2])
 
@@ -122,13 +121,13 @@ working_dir = os.path.dirname(os.path.abspath(__file__)) + os.sep
 # LOAD CONFIGURATION
 
 # load configuration object with configuration file smtp.conf.json
-config = ciaotools.load_config(working_dir)
+config = ciao.load_config(working_dir)
 
 # load parameters
 file_root = config["params"]["root"] if "root" in config["params"] else "/root"
 file_eol = config["params"]["eol"] if "eol" in config["params"] else "\n"
 file_rl = config["params"]["read_line"] if "read_line" in config["params"] else False
-file_rms = config["params"]["read_max_size"] if "read_max_size" in config["params"] else 2048
+file_rms = config["params"]["read_max_size"] if "read_max_size" in config["params"] else 1024
 file_wam = config["params"]["default_write_access_mode"] if "default_write_access_mode" in config["params"] else "w"
 
 # name of the connector
@@ -137,12 +136,12 @@ name = config["name"]
 # CREATE LOGGER
 
 log_config = config["log"] if "log" in config else None
-logger = ciaotools.get_logger(name, logconf=log_config, logdir=working_dir)
+logger = ciao.get_logger(name, logconf=log_config, logdir=working_dir)
 
 # CALL BASE CONNECTOR
 
 #Call a base connector object to help connection to ciao core
-ciao_connector = ciaotools.BaseConnector(name, logger, config["ciao"],async=True)
+ciao_connector = ciao.BaseConnector(name, logger, config["ciao"],async=True)
 
 #register an handler to manage data from core/mcu
 ciao_connector.receive(handler)
