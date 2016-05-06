@@ -36,8 +36,6 @@ from Queue import Queue
 from logging.handlers import RotatingFileHandler
 from json.decoder import WHITESPACE
 
-
-
 class CiaoThread(Thread, asyncore.dispatcher_with_send):
 
 	# "name" must be specified in __init__ method
@@ -226,15 +224,22 @@ class BaseConnector:
 		self.__shared["conf"]["name"] = self.name
 		#self.__shared["conf"] = self.__conf
 
-		# ASCII code alias/substitution for NL
-		self.__NL_F = chr(29)
-		self.__NL_R = "\n"
-		# ASCII code alias/substitution for NL
-		self.__CR_F = chr(31)
-		self.__CR_R = "\r"
+		# ASCII code Group Separator but sed as alias/substitution for New Line character
+		self.NL_CODE = chr(29) #(non-printable char)
+		self.NL = "\n"
 
-		self.__NLCR_F = chr(29)+chr(31)
-		self.__NLCR_R = "\n\r"
+		# ASCII code for File Separator but sed as alias/substitution for Carriage Return
+		self.CR_CODE = chr(28) #(non-printable char)
+		self.CR = "\r"
+
+		# ASCII code for End of Medium but sed as alias/substitution for Tabs
+		self.TAB_CODE = chr(25) #(non-printable char)
+		self.TAB = "\t"
+
+		# ASCII code for Negative Acknowledgement - Used to separate arguments.
+		# Usually Ciao write, read and CiaoData have only 3/4 arguments and sometimes
+		# are not enough. Put all togheter the arguments and separate it with this char code.
+		self.ARGS_SEP_CODE = chr(21)
 
 
 	def set_loop_status(self, status):
@@ -287,6 +292,8 @@ class BaseConnector:
 
 	# push data into the core queue. these data will be sent to the core (arduino/mcu)
 	def send(self, entry):
+		for index, item in enumerate(entry["data"]):
+			entry["data"][index] = item.replace(self.TAB,self.TAB_CODE).replace(self.NL,self.NL_CODE).replace(self.CR, self.CR_CODE)
 		self.__queue_to_core.put(entry)
 
 	# receive data back from the core (arduino/mcu), in a sync or async way,
@@ -301,7 +308,7 @@ class BaseConnector:
 
 	def __pre_handling(self, entry):
 		for index, item in enumerate(entry["data"]):
-			entry["data"][index] = item.replace(self.__NLCR_F, self.__NLCR_R).replace(self.__NL_F, self.__NL_R).replace(self.__CR_F, self.__CR_R)
+			entry["data"][index] = item.replace(self.TAB_CODE,self.TAB).replace(self.NL_CODE, self.NL).replace(self.CR_CODE, self.CR)
 		self.__handler(entry)
 
 def load_config(cwd):

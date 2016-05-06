@@ -69,11 +69,38 @@ base_params = {
 	"writeresponse" : 3, # connector_name + action + checksum
 }
 
+
+# ASCII code Group Separator but sed as alias/substitution for New Line character
+NL_CODE = chr(29) #(non-printable char)
+NL = "\n"
+
+# ASCII code for File Separator but sed as alias/substitution for Carriage Return
+CR_CODE = chr(28) #(non-printable char)
+CR = "\r"
+
+# ASCII code for End of Medium but sed as alias/substitution for Tabs
+TAB_CODE = chr(25) #(non-printable char)
+TAB = "\t"
+
+# ASCII code for Negative Acknowledgement - Used to separate arguments.
+# Usually Ciao write, read and CiaoData have only 3/4 arguments and sometimes
+# are not enough. Put all togheter the arguments and separate it with this char code.
+ARGS_SEP_CODE = chr(21)
+
+# ASCII code for Record Separator
+ENTRY_SEP_CODE = chr(30) #(non-printable char)
+
+# ASCII code for Unit Separator (non-printable char)
+KV_SEP_CODE = chr(31) #(non-printable char)
+
+
+'''
 #serialization settings
 # ASCII code for GroupSeparator (non-printable char)
 entry_separator = chr(30)
 # ASCII code for UnitSeparator (non-printable char)
 keyvalue_separator = chr(31)
+'''
 
 #enable/disable fake.stdin - FOR TESTING PURPOSE
 # atm this params has to be set to True only

@@ -76,10 +76,10 @@ def serialize(data):
 			entries.append(escape(e))
 	elif isinstance(data, dict):
 		for k, v in data.items():
-			entries.append(settings.keyvalue_separator.join([escape(k), escape(v)]))
+			entries.append(settings.KV_SEP_CODE.join([escape(k), escape(v)]))
 	else:
 		entries.append(escape(data))
-	s.fromstring(settings.entry_separator.join(entries))
+	s.fromstring(settings.ENTRY_SEP_CODE.join(entries))
 	return s
 
 # unserialize passed dict/list, atm it works only for one level object not nested ones
@@ -94,11 +94,11 @@ def unserialize(source, from_array = True):
 
 	#identifying data type
 	try:
-		index = data.index(ord(settings.keyvalue_separator))
+		index = data.index(ord(settings.KV_SEP_CODE))
 		result = {}
 	except ValueError, e:
 		try:
-			index = data.index(ord(settings.entry_separator))
+			index = data.index(ord(settings.ENTRY_SEP_CODE))
 			result = []
 		except ValueError, e:
 			result = []
@@ -112,10 +112,10 @@ def unserialize(source, from_array = True):
 		while count < size:
 			pick = data.pop(0)
 			count +=1
-			if pick == ord(settings.keyvalue_separator):
+			if pick == ord(settings.KV_SEP_CODE):
 				param_index = 1
 				params[param_index] = ""
-			elif pick == ord(settings.entry_separator):
+			elif pick == ord(settings.ENTRY_SEP_CODE):
 				result[escape(params[0], False)] = escape(params[1], False)
 				param_index = 0
 				params = ["", ""]
@@ -128,7 +128,7 @@ def unserialize(source, from_array = True):
 		while count < size:
 			pick = data.pop(0)
 			count +=1
-			if pick == ord(settings.entry_separator):
+			if pick == ord(settings.ENTRY_SEP_CODE):
 				result.append(escape(entry, False))
 				entry = ""
 			else:
