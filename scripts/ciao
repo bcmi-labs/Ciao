@@ -1,0 +1,39 @@
+#!/bin/sh /etc/rc.common
+#
+# Copyright (c) 2016 Arduino Srl
+# This file is part of Arduino Ciao.
+
+START=97
+STOP=97
+
+start() {
+	ps w | grep -v grep | grep "ciao-daemon" > /dev/null
+	if ! [ $? -eq 0 ]; then
+		ciao-daemon &
+	fi
+}
+
+stop() {
+	##kill connectors
+	for file in /var/run/*-ciao.pid
+	do
+		kill -9 `cat $file`
+		rm $file
+	done
+
+	##kill ciao
+	PID=`/usr/bin/pgrep -f "python -u ciao.py"`
+	if [ "x$PID" != "x" ]; then
+		/bin/kill -9 $PID
+	fi
+
+	##kill daemon
+	killall ciao-daemon
+
+	## Kill all processes with the 'ciao' name
+	#for pid in `/usr/bin/pgrep -f "ciao"`
+	#do
+	#	/bin/kill -9 $pid
+	#done
+
+}

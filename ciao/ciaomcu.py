@@ -52,7 +52,12 @@ class CiaoMcu(object):
 		""" Gets value and create a message to write to the MCU """
 		return
 
-class StdOut(CiaoMcu):
+	@abc.abstractmethod
+	def flush(self):
+		""" Flushes data from the buffer """
+		return
+
+class StdIO(CiaoMcu):
 
 	def __init__(self, settings, logger):
 		self.__handler = None
@@ -72,7 +77,8 @@ class StdOut(CiaoMcu):
 			#allow terminal echo to be enabled back when ciao exits
 			atexit.register(self.__enable_echo, sys.stdin.fileno(), True)
 			self.__handler = io.open(sys.stdin.fileno(), "rb")
-			self.__flush_terminal(sys.stdin)
+			#self.__flush_terminal(sys.stdin)
+			self.flush()
 
 	def stop(self):
 		return
@@ -98,16 +104,20 @@ class StdOut(CiaoMcu):
 		new_attr = [iflag, oflag, cflag, lflag, ispeed, ospeed, cc]
 		termios.tcsetattr(fd, termios.TCSANOW, new_attr)
 
+	def flush(self):
+		termios.tcflush(sys.stdin, termios.TCIOFLUSH)
+		sys.stdout.flush()
+
 	# flush stdin before starting service
 	# it prevents answering to requests sent before Ciao Core is really up and running
-	def __flush_terminal(self, fd):
-		termios.tcflush(fd, termios.TCIOFLUSH)
+	#def __flush_terminal(self, fd):
+	#	termios.tcflush(fd, termios.TCIOFLUSH)
 
 class Serial(CiaoMcu):
 
 	def __init__(self, baseport, baudrate, logger):
 		self.__serial = None
-		self.__conn_status = False
+		#self.__conn_status = False
 		self.__port = None
 		self.__baseport = baseport
 		self.__baudrate = baudrate
@@ -115,10 +125,10 @@ class Serial(CiaoMcu):
 
 	def __connect(self):
 		try :
-			self.__conn_status = False
-			if not self.__serial is None:
-				self.__serial.close()
-				time.sleep(30)
+			#self.__conn_status = False
+			#if not self.__serial is None:
+			#	self.__serial.close()
+			#	time.sleep(30)
 
 			if not os.path.exists(self.__baseport):
 				self.__logger.error(self.__baseport + " not found. Maybe there are problems. Exiting Ciao.")
@@ -126,36 +136,49 @@ class Serial(CiaoMcu):
 
 			self.__logger.debug("Connecting to " + self.__baseport + " at " + str(self.__baudrate) + " baud")
 			self.__serial = serial.Serial(self.__baseport, self.__baudrate, timeout = 0)
-			self.__conn_status = True
+			#self.__conn_status = True
 
 		except Exception, e:
 			raise ValueError(e)
+
+	def flush(self):
+		if not self.__serial is None:
+			self.__serial.flush()
+			self.__serial.flushInput()
+			self.__serial.flushOutput()
+
+	def __kill_ciao(self):
+		self.__serial.close()
+		utils.kill_connectors_by_pids()
+		os.system(' kill -9 `/usr/bin/pgrep -f "python -u ciao.py"` ')
 
 	def start(self):
 		self.__connect()
 
 	def stop(self):
-		self.__conn_status = False
+		#self.__conn_status = False
 		self.__serial.close()
 
 	def read(self):
-		if self.__conn_status:
-			try:
-				return self.__serial.readline()
-			except Exception, e:
-				self.__logger.warning("Problems during read from MCU, trying reconnection...")
-				self.__connect()
+		#if self.__conn_status:
+		try:
+			return self.__serial.readline()
+		except Exception, e:
+			self.__logger.warning("Problems when reading from MCU, trying reconnection...")
+			#self.__connect()
+			self.__kill_ciao()
 
 	def write(self, status, message, data = None):
-		if self.__conn_status:
-			try:
-				output = [ str(status), str(message) ]
-				if not data is None:
-					data = utils.serialize(data)
-					output.append(data.tostring())
-				send = ";".join(output)+ chr(4)
-				for i in send:
-					self.__serial.write(i)
-			except Exception, e:
-				self.__logger.warning("Problems during write to MCU, trying reconnection...")
-				self.__connect()
+		#if self.__conn_status:
+		try:
+			output = [ str(status), str(message) ]
+			if not data is None:
+				data = utils.serialize(data)
+				output.append(data.tostring())
+			send = ";".join(output)+ chr(4)
+			for i in send:
+				self.__serial.write(i)
+		except Exception, e:
+			self.__logger.warning("Problems when writing to MCU, trying reconnection...")
+			self.__kill_ciao()
+			#self.__connect()

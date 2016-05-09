@@ -32,7 +32,7 @@ basepath = os.path.dirname(os.path.abspath(__file__)) + os.sep
 
 #configuration dictionary
 conf = {
-	"core" : "0.0.2",
+	"core" : "0.1.0",
 	"server": {
 		"host" : "localhost",
 		"port" : 8900
@@ -69,11 +69,38 @@ base_params = {
 	"writeresponse" : 3, # connector_name + action + checksum
 }
 
+
+# ASCII code Group Separator but sed as alias/substitution for New Line character
+NL_CODE = chr(29) #(non-printable char)
+NL = "\n"
+
+# ASCII code for File Separator but sed as alias/substitution for Carriage Return
+CR_CODE = chr(28) #(non-printable char)
+CR = "\r"
+
+# ASCII code for End of Medium but sed as alias/substitution for Tabs
+TAB_CODE = chr(25) #(non-printable char)
+TAB = "\t"
+
+# ASCII code for Negative Acknowledgement - Used to separate arguments.
+# Usually Ciao write, read and CiaoData have only 3/4 arguments and sometimes
+# are not enough. Put all togheter the arguments and separate it with this char code.
+ARGS_SEP_CODE = chr(21)
+
+# ASCII code for Record Separator
+ENTRY_SEP_CODE = chr(30) #(non-printable char)
+
+# ASCII code for Unit Separator (non-printable char)
+KV_SEP_CODE = chr(31) #(non-printable char)
+
+
+'''
 #serialization settings
 # ASCII code for GroupSeparator (non-printable char)
 entry_separator = chr(30)
 # ASCII code for UnitSeparator (non-printable char)
 keyvalue_separator = chr(31)
+'''
 
 #enable/disable fake.stdin - FOR TESTING PURPOSE
 # atm this params has to be set to True only
@@ -114,7 +141,7 @@ def load_connectors(logger):
 	else:
 		conf['connectors'] = {}
 		for conf_file in conf_list:
-			if conf_file.endswith(".json.conf"):
+			if conf_file.endswith("ciao.json.conf"):
 				try:
 					conf_json = open(conf_path + conf_file).read()
 					conf_plain = json.loads(conf_json)
@@ -122,7 +149,7 @@ def load_connectors(logger):
 						connector_name = conf_plain['name']
 					else:
 						logger.debug("Missing connector name in configuration file(%s)" % conf_file)
-						connector_name = conf_file[:-len(".json.conf")]
+						connector_name = conf_file[:-len(".ciao.json.conf")]
 					if "enabled" in conf_plain and conf_plain['enabled']:
 						conf['connectors'][connector_name] = conf_plain
 						logger.debug("Loaded configuration for %s connector" % connector_name)

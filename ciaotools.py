@@ -36,6 +36,22 @@ from Queue import Queue
 from logging.handlers import RotatingFileHandler
 from json.decoder import WHITESPACE
 
+# ASCII code Group Separator but sed as alias/substitution for New Line character
+NL_CODE = chr(29) #(non-printable char)
+NL = "\n"
+
+# ASCII code for File Separator but sed as alias/substitution for Carriage Return
+CR_CODE = chr(28) #(non-printable char)
+CR = "\r"
+
+# ASCII code for End of Medium but sed as alias/substitution for Tabs
+TAB_CODE = chr(25) #(non-printable char)
+TAB = "\t"
+
+# ASCII code for Negative Acknowledgement - Used to separate arguments.
+# Usually Ciao write, read and CiaoData have only 3/4 arguments and sometimes
+# are not enough. Put all togheter the arguments and separate it with this char code.
+ARGS_SEP_CODE = chr(21)
 
 
 class CiaoThread(Thread, asyncore.dispatcher_with_send):
@@ -69,7 +85,6 @@ class CiaoThread(Thread, asyncore.dispatcher_with_send):
 				self.host = self.shd['conf']['ciao']['host']
 			if "port" in self.shd['conf']['ciao']:
 				self.port = self.shd['conf']['ciao']['port']
-
 
 		# setup logger
 		self.logger = logging.getLogger(self.name)
@@ -197,12 +212,9 @@ class CiaoThread(Thread, asyncore.dispatcher_with_send):
 
 class BaseConnector:
 
-	def __init__(self, name, logger, ciao_conf):
+	def __init__(self, name, logger, ciao_conf, async = True):
 		# connector name, used also in ciao library (mcu) to indentify the connector, it will be the same
 		self.name = name # probabilmente se lo puo caricare direttamente dal file di configurazione.
-
-		# the current working directory (or basepath) of the connector
-		#self.__cwd = cwd
 
 		# handler to trigger when data from ciao core are available.
 		self.__handler = {}
@@ -212,6 +224,9 @@ class BaseConnector:
 
 		# it's a queue which stores commands/data/messages directed to the ciao core and then to the mcu.
 		self.__queue_to_core = Queue()
+
+		# specify if the data from core/mcu will handled synchronously or asynchronously, by default is asynchronous
+		self.__async = async
 
 		# conf object which stores data of the configuration file
 		#self.__conf = json.loads( open(self.__cwd + name + ".json.conf" ).read())
@@ -227,17 +242,6 @@ class BaseConnector:
 		self.__shared["conf"]["name"] = self.name
 		#self.__shared["conf"] = self.__conf
 
-		# ASCII code alias/substitution for NL
-		self.__NL_F = chr(29)
-		self.__NL_R = "\n"
-		# ASCII code alias/substitution for NL
-		self.__CR_F = chr(31)
-		self.__CR_R = "\r"
-
-		self.__NLCR_F = chr(29)+chr(31)
-		self.__NLCR_R = "\n\r"
-
-
 	def set_loop_status(self, status):
 		if isistance(status, bool):
 			self.__shared["loop"] = status
@@ -252,17 +256,17 @@ class BaseConnector:
 		signal.signal(signal.SIGHUP, self.__signal_handler)
 		signal.signal(signal.SIGTERM, self.__signal_handler)
 
-		while self.__shared["loop"]:
-			if not self.__queue_to_connector.empty():
-				entry = self.__queue_to_connector.get()
-				self.__logger.info("Entry %s" % entry)
-				#trigger
-				self.__pre_handling(entry)
-
-			# the sleep is really useful to prevent ciao to cap all CPU
-			# this could be increased/decreased (keep an eye on CPU usage)
-			# time.sleep is MANDATORY to make signal handlers work (they are synchronous in python)
-			time.sleep(0.01) ##rendere configurabile
+		if self.__async:
+			while self.__shared["loop"]:
+				if not self.__queue_to_connector.empty():
+					entry = self.__queue_to_connector.get()
+					self.__logger.info("Entry %s" % entry)
+					#trigger
+					self.__pre_handling(entry)
+				# the sleep is really useful to prevent ciao to cap all CPU
+				# this could be increased/decreased (keep an eye on CPU usage)
+				# time.sleep is MANDATORY to make signal handlers work (they are synchronous in python)
+				time.sleep(0.01) ##rendere configurabile
 
 	# creates a forked process and writes its pid number into a file,
 	# used by the ciao core to kill the process
@@ -288,15 +292,23 @@ class BaseConnector:
 
 	# push data into the core queue. these data will be sent to the core (arduino/mcu)
 	def send(self, entry):
+		#for index, item in enumerate(entry["data"]):
+		#	entry["data"][index] = item.replace(TAB, TAB_CODE).replace(NL, NL_CODE).replace(CR, CR_CODE)
 		self.__queue_to_core.put(entry)
 
-	# register the handler for get data back from the core (arduino/mcu)
-	def receive(self, handler):
-		self.__handler = handler
+	# receive data back from the core (arduino/mcu), in a sync or async way,
+	# depends on handler function and asynchronous argument
+	def receive(self, handler = None):
+		if not handler is None and self.__async :
+			self.__logger.info("ASYNC call")
+			self.__handler = handler
+		else :
+			self.__logger.info("SYNC call")
+			return self.__queue_to_connector.get()
 
 	def __pre_handling(self, entry):
 		for index, item in enumerate(entry["data"]):
-			entry["data"][index] = item.replace(self.__NLCR_F, self.__NLCR_R).replace(self.__NL_F, self.__NL_R).replace(self.__CR_F, self.__CR_R)
+			entry["data"][index] = item.replace(TAB_CODE, TAB).replace(NL_CODE, NL).replace(CR_CODE, CR)
 		self.__handler(entry)
 
 def load_config(cwd):
