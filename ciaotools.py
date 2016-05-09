@@ -36,6 +36,24 @@ from Queue import Queue
 from logging.handlers import RotatingFileHandler
 from json.decoder import WHITESPACE
 
+# ASCII code Group Separator but sed as alias/substitution for New Line character
+NL_CODE = chr(29) #(non-printable char)
+NL = "\n"
+
+# ASCII code for File Separator but sed as alias/substitution for Carriage Return
+CR_CODE = chr(28) #(non-printable char)
+CR = "\r"
+
+# ASCII code for End of Medium but sed as alias/substitution for Tabs
+TAB_CODE = chr(25) #(non-printable char)
+TAB = "\t"
+
+# ASCII code for Negative Acknowledgement - Used to separate arguments.
+# Usually Ciao write, read and CiaoData have only 3/4 arguments and sometimes
+# are not enough. Put all togheter the arguments and separate it with this char code.
+ARGS_SEP_CODE = chr(21)
+
+
 class CiaoThread(Thread, asyncore.dispatcher_with_send):
 
 	# "name" must be specified in __init__ method
@@ -224,24 +242,6 @@ class BaseConnector:
 		self.__shared["conf"]["name"] = self.name
 		#self.__shared["conf"] = self.__conf
 
-		# ASCII code Group Separator but sed as alias/substitution for New Line character
-		self.NL_CODE = chr(29) #(non-printable char)
-		self.NL = "\n"
-
-		# ASCII code for File Separator but sed as alias/substitution for Carriage Return
-		self.CR_CODE = chr(28) #(non-printable char)
-		self.CR = "\r"
-
-		# ASCII code for End of Medium but sed as alias/substitution for Tabs
-		self.TAB_CODE = chr(25) #(non-printable char)
-		self.TAB = "\t"
-
-		# ASCII code for Negative Acknowledgement - Used to separate arguments.
-		# Usually Ciao write, read and CiaoData have only 3/4 arguments and sometimes
-		# are not enough. Put all togheter the arguments and separate it with this char code.
-		self.ARGS_SEP_CODE = chr(21)
-
-
 	def set_loop_status(self, status):
 		if isistance(status, bool):
 			self.__shared["loop"] = status
@@ -292,8 +292,8 @@ class BaseConnector:
 
 	# push data into the core queue. these data will be sent to the core (arduino/mcu)
 	def send(self, entry):
-		for index, item in enumerate(entry["data"]):
-			entry["data"][index] = item.replace(self.TAB,self.TAB_CODE).replace(self.NL,self.NL_CODE).replace(self.CR, self.CR_CODE)
+		#for index, item in enumerate(entry["data"]):
+		#	entry["data"][index] = item.replace(TAB, TAB_CODE).replace(NL, NL_CODE).replace(CR, CR_CODE)
 		self.__queue_to_core.put(entry)
 
 	# receive data back from the core (arduino/mcu), in a sync or async way,
@@ -308,7 +308,7 @@ class BaseConnector:
 
 	def __pre_handling(self, entry):
 		for index, item in enumerate(entry["data"]):
-			entry["data"][index] = item.replace(self.TAB_CODE,self.TAB).replace(self.NL_CODE, self.NL).replace(self.CR_CODE, self.CR)
+			entry["data"][index] = item.replace(TAB_CODE, TAB).replace(NL_CODE, NL).replace(CR_CODE, CR)
 		self.__handler(entry)
 
 def load_config(cwd):
