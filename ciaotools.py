@@ -300,10 +300,8 @@ class BaseConnector:
 	# depends on handler function and asynchronous argument
 	def receive(self, handler = None):
 		if not handler is None and self.__async :
-			self.__logger.info("ASYNC call")
 			self.__handler = handler
 		else :
-			self.__logger.info("SYNC call")
 			return self.__queue_to_connector.get()
 
 	def __pre_handling(self, entry):
