@@ -97,12 +97,10 @@ def handler(mcu_req):
 	if mcu_req["type"] == "result":
 		#mcu_req["data"][0] # command
 		#mcu_req["data"][1] # arguments
-		if len(mcu_req) == 2:
-			logger.debug(mcu_req["data"])
-			logger.debug("2")
+		logger.debug(mcu_req["data"])
+		if len(mcu_req["data"]) == 2:
 			args = mcu_req["data"][1]
 		else:
-			logger.debug("1")
 			args = ""
 
 		run_command(mcu_req["data"][0], args, mcu_req["checksum"])
