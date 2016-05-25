@@ -141,7 +141,7 @@ logger = ciao.get_logger(name, logconf=log_config, logdir=working_dir)
 # CALL BASE CONNECTOR
 
 #Call a base connector object to help connection to ciao core
-ciao_connector = ciao.BaseConnector(name, logger, config["ciao"], async = False)
+ciao_connector = ciao.BaseConnector(name, logger, async = False)
 
 # start the connector thread
 ciao_connector.start()
