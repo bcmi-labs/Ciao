@@ -9,7 +9,7 @@ board model, using awk command
 3) insert commands arguments list.
 
 NOTE: be sure to activate and configure shell connector on Linino OS.
-http://labs.arduino.org/Ciao
+http://www.arduino.org/learning/reference/ciao-shell
 
 authors:
 created 6 Mag 2016 - sergio tomasello

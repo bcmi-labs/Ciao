@@ -11,7 +11,7 @@ http://stackoverflow.com/questions/9229333/how-to-get-overall-cpu-usage-e-g-57-o
 3) insert commands arguments list.
 
 NOTE: be sure to activate and configure shell connector on Linino OS.
-http://labs.arduino.org/Ciao
+http://www.arduino.org/learning/reference/ciao-shell
 
 authors:
 created 9 Mag 2016 - sergio tomasello
