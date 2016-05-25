@@ -212,7 +212,7 @@ class CiaoThread(Thread, asyncore.dispatcher_with_send):
 
 class BaseConnector:
 
-	def __init__(self, name, logger, ciao_conf, async = True):
+	def __init__(self, name, logger, async = True):
 		# connector name, used also in ciao library (mcu) to indentify the connector, it will be the same
 		self.name = name # probabilmente se lo puo caricare direttamente dal file di configurazione.
 
@@ -231,6 +231,11 @@ class BaseConnector:
 		# conf object which stores data of the configuration file
 		#self.__conf = json.loads( open(self.__cwd + name + ".json.conf" ).read())
 
+		# internal socket parameters used between Ciao core and the connectors 
+		ciao_conf = {
+			"host" : "127.0.0.1",
+			"port" : 8900
+		}
 		# logger object for logging
 		#self.__logger = ciaotools.get_logger(self.name, logconf=self.__conf, logdir=self.__cwd)
 		self.__logger = logger

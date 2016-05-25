@@ -1,11 +1,12 @@
 /*
 Arduino Ciao File Connector: File Overwrite
 
-Open a file, reads its contents and shows it in an LCD Display( 16x2 ).
-Before starts create a file and write a line to display into LCD.
+Open a file, reads its contents and shows it via serial .
+Before starts create a file and write a line to display or
+Move the attached file (sample.txt) into /root/ directory of your LininoOS.
 
 NOTE: be sure to activate and configure file connector on Linino OS.
-http://labs.arduino.org/Ciao
+http://www.arduino.org/learning/reference/ciao-file
 
 How to specify file:
 - relative path: the base path is the 'root' parameters specified in the configuration file
@@ -22,19 +23,14 @@ created 29 Apr 2016 - sergio tomasello
 */
 
 #include <Ciao.h>
-#include <LCD_m0.h>
-
-LCD_m0 LCD;
 
 void setup() {
 	//init Ciao and LCD
 	Ciao.begin();
-	LCD.Inizializza_LCD(12,11,5,4,3,2); //D4,D5,D6,D7
+	Serial.begin(9600);
 }
 
 void loop() {
-	//Clear LCD screen
-	LCD.Pulisci();
 	delay(2000);
 
 	//Read file from lininoOS
@@ -44,8 +40,8 @@ void loop() {
 		//extract data from Ciao
 		String message = data.get(2);
 
-		//Print message into LCD Display
-		LCD.Scrivi_Testo(message,1);
+		//Print message via serial
+		Serial.println(message);
 	}
 	//Delay the operations because IO is slow
 	delay(2000);
