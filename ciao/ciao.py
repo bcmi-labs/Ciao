@@ -82,7 +82,7 @@ server.start()
 
 mcu = None
 
-if board_model == "ARDUINO YUN":
+if board_model == "ARDUINO YUN" or board_model == "ARDUINO YUN-MINI" or board_model == "ARDUINO CHIWAWA" or board_model == "LININO ONE":
 	logger.debug("Ciao MCU Connection starting via standard output")
 	mcu = ciaomcu.StdIO(settings, logger)
 	mcu.start()
