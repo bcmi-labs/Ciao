@@ -231,7 +231,7 @@ class BaseConnector:
 		# conf object which stores data of the configuration file
 		#self.__conf = json.loads( open(self.__cwd + name + ".json.conf" ).read())
 
-		# internal socket parameters used between Ciao core and the connectors 
+		# internal socket parameters used between Ciao core and the connectors
 		ciao_conf = {
 			"host" : "127.0.0.1",
 			"port" : 8900
@@ -303,11 +303,14 @@ class BaseConnector:
 
 	# receive data back from the core (arduino/mcu), in a sync or async way,
 	# depends on handler function and asynchronous argument
-	def receive(self, handler = None):
+	def receive(self, handler = None, timeout = None):
 		if not handler is None and self.__async :
 			self.__handler = handler
 		else :
-			return self.__queue_to_connector.get()
+			if timeout is None :
+				return self.__queue_to_connector.get()
+			else:
+				return self.__queue_to_connector.get(block = True, timeout = timeout)
 
 	def __pre_handling(self, entry):
 		for index, item in enumerate(entry["data"]):
