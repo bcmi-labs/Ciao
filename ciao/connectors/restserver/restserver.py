@@ -45,7 +45,6 @@ class HTTPServer(BaseHTTPServer.BaseHTTPRequestHandler):
 		request = self.path[1:]  		# remove "/" from self.path (ex: from /arduino/digital/13/1 to arduino/digital/13/1)
 		if '/' in request:
  			service = request[:request.index('/')] # parse the service (ex: arduino )
-			logger.info(request)
 			if "arduino" in service:
 			 	message = request[request.index('/')+1:] # parse the command to MCU (ex: digital/13/1)
 				mcu_response = {"data": message}
