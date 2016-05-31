@@ -7,10 +7,10 @@
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -18,116 +18,135 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-# 
+#
 # Copyright 2015 Arduino Srl (http://www.arduino.org/)
-# 
+#
 # authors:
 # _andrea[at]arduino[dot]org
 # _giuseppe[at]arduino[dot]org
-# 
+#
 #
 ###
 
-import os, sys, signal, asyncore, socket, time
+import os, sys, signal, socket
 from thread import *
-import json, logging
-from Queue import Queue
-import ciaotools
+import ciaotools as ciao
+import BaseHTTPServer
 
-from restserverciao import RESTserverCiao
+class HTTPServer(BaseHTTPServer.BaseHTTPRequestHandler):
 
-# function to handle SIGHUP/SIGTERM
+	def do_GET(self):
 
-def restserver_handler(conn, shd,logger):
+		# Response to a GET request
+		self.send_response(200)
+		self.send_header("Content-type", "text/plain")
+		self.end_headers()
+
+		request = self.path[1:]  		# remove "/" from self.path (ex: from /arduino/digital/13/1 to arduino/digital/13/1)
+		if '/' in request:
+ 			service = request[:request.index('/')] # parse the service (ex: arduino )
+			if "arduino" in service:
+			 	message = request[request.index('/')+1:] # parse the command to MCU (ex: digital/13/1)
+				mcu_response = {"data": message}
+				ciao_connector.send(mcu_response)
+				reply = ""
+				try:
+					mcu_request = ciao_connector.receive(timeout = restserver_timeout)
+					if mcu_request['type'] == "response":
+						reply = str(mcu_request['data'][0])
+				except:
+					reply = "timeout"
+				self.wfile.write(reply+'\r\n')
+			else:
+				self.wfile.write("No such file or directory")
+		else:
+			self.wfile.write("No such file or directory")
+
+	#override BaseHTTPServer log method
+	def log_message(self, format, *args):
+		logger.debug("request %s" % format%args )
+
+def restserver_handler(conn, config,logger):
 
 	message = conn.recv(1024)
-	logger.debug("Message %s" % message)
 	reply = ""
 	if message != "" :
-	 	entry = {"data" : [str(message).rstrip('\r\n')]}
-	 	socket_queue.put(entry)
-		entry = rest_queue.get()
-		if entry['type'] == "response":
-			original_checksum = entry["source_checksum"]
-			if not original_checksum in shd["requests"]:
-				logger.warning("Received response to unknown checksum %s" % original_checksum)
-			original_message = shd["requests"][original_checksum]
-			reply = str(entry['data'][0])
-			logger.debug("data send %s" % reply)
+	 	mcu_response = {"data" : [str(message).rstrip('\r\n')]}
+	 	ciao_connector.send(mcu_response)
+		mcu_request = ciao_connector.receive(timeout = restserver_timeout)
+		if mcu_request['type'] == "response":
+		 	reply = str(mcu_request['data'][0])
 	conn.send(reply+'\r\n')
-	conn.close()			
+	conn.close()
 
-def signal_handler(signum, frame):
-	global logger
-	logger.info("SIGNAL CATCHED %d" % signum)
-	global shd
-	shd["loop"] = False
+def internal_httpserver_connect()	:
 
-#shared dictionary
-shd = {}
-shd["loop"] = True
-shd["basepath"] = os.path.dirname(os.path.abspath(__file__)) + os.sep
-
-
-#read configuration
-#TODO
-# verify configuration is a valid JSON
-json_conf = open(shd["basepath"]+"restserver.json.conf").read()
-shd["conf"] = json.loads(json_conf)
-#init log
-
-logger = ciaotools.get_logger("restserver", logconf=shd["conf"], logdir=shd["basepath"])
-
-#forking to make process standalone
-try:
-	pid = os.fork()
-	if pid > 0:
-		# Save child pid to file and exit parent process
-		runfile = open("/var/run/restserver-ciao.pid", "w")
-		runfile.write("%d" % pid)
-		runfile.close()
-		sys.exit(0)
-
-except OSError, e:
-	logger.critical("Fork failed")
-	sys.exit(1)
-
-rest_queue = Queue()
-socket_queue = Queue()
-
-signal.signal(signal.SIGINT, signal.SIG_IGN) #ignore SIGINT(ctrl+c)
-signal.signal(signal.SIGHUP, signal_handler)
-signal.signal(signal.SIGTERM, signal_handler)
-
-shd["requests"] = {}
-
-ciaoclient = RESTserverCiao(shd, rest_queue, socket_queue)
-ciaoclient.start()
-
-try:
-	HOST = shd["conf"]["params"]["host"]   
-	PORT = shd["conf"]["params"]["port"] # Luci port
-	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+	# socket connection with the lua webserver on port 5555
 	try:
-		s.bind((HOST, PORT))
-	except socket.error as msg:
-		logger.error('Bind failed. Error Code : '+ str(msg[0]) +' Message ' + msg[1])
-		sys.exit()	 
-	#Start listening on socket
+		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+		try:
+			s.bind(('localhost', 5555))
+		except socket.error as msg:
+			logger.error('Bind failed. Error Code : '+ str(msg[0]) +' Message ' + msg[1])
+			sys.exit()
+		#Start listening on socket
+		logger.info("REST server connector started")
+		s.listen(10)
+		while True :
+		 	conn, addr = s.accept()
+		 	start_new_thread(restserver_handler ,(conn, config,logger,))
+			#restserver_handler (conn, shd,logger)
+
+	except Exception, e:
+		s.close()
+		logger.info("Exception while creating REST server: %s" % e)
+		#sys.exit(1)
+
+	else:
+		s.close()
+		logger.info("REST server connector is closing")
+		#sys.exit(0)
+
+def httpserver_connect()	:
+	httpserver_address = ('', restserver_port)
+	httpserver = BaseHTTPServer.HTTPServer(httpserver_address, HTTPServer)
 	logger.info("REST server connector started")
-	s.listen(10)
-	while shd["loop"] :
-		conn, addr = s.accept()
-		start_new_thread(restserver_handler ,(conn, shd,logger,))
-		#restserver_handler (conn, shd,logger)
+	while True:
+		try:
+			httpserver.handle_request()
+		except Exception, e:
+			logger.error("Exception while creating REST server: %s" % e)
+	httpserver.server_close()
 
-except Exception, e:
-	s.close()
-	logger.info("Exception while creating REST server: %s" % e)
-	sys.exit(1)
+# the absolute path of the connector
+working_dir = os.path.dirname(os.path.abspath(__file__)) + os.sep
 
+# LOAD CONFIGURATION
+
+# load configuration object with configuration file restserver.conf.json
+config = ciao.load_config(working_dir)
+restserver_port = config["params"]["port"] if "port" in config["params"] else 80
+restserver_timeout = config["params"]["timeout"] if "timeout" in config["params"] and not config["params"]["timeout"] == 0 else None
+
+# name of the connector
+name = config["name"]
+
+# CREATE LOGGER
+
+log_config = config["log"] if "log" in config else None
+logger = ciao.get_logger(name, logconf=log_config, logdir=working_dir)
+
+# CALL BASE CONNECTOR
+
+#Call a base connector object to help connection to ciao core
+ciao_connector = ciao.BaseConnector(name, logger, async = False)
+
+# start the connector thread
+ciao_connector.start()
+
+# Initialize httpserver
+if restserver_port is 80:
+	internal_httpserver_connect()
 else:
-	s.close()
-	logger.info("REST server connector is closing")
-	sys.exit(0)
+	httpserver_connect()

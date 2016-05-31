@@ -6,10 +6,10 @@
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -17,16 +17,16 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-# 
+#
 # Copyright 2015 Arduino Srl (http://www.arduino.org/)
-# 
+#
 # authors:
 # _giuseppe[at]arduino[dot]org
 #
 ###
 
 import os, sys, time, logging
-import tty, termios
+import tty #, termios
 import re, array
 import socket
 import hashlib
@@ -35,24 +35,9 @@ from logging.handlers import RotatingFileHandler
 
 import settings
 
-# enable/disable echo on tty
-def enable_echo(fd, enabled):
-	(iflag, oflag, cflag, lflag, ispeed, ospeed, cc) = termios.tcgetattr(fd)
-	if enabled:
-		lflag |= termios.ECHO
-	else:
-		lflag &= ~termios.ECHO
-	new_attr = [iflag, oflag, cflag, lflag, ispeed, ospeed, cc]
-	termios.tcsetattr(fd, termios.TCSANOW, new_attr)
-
-# flush stdin before starting service
-# it prevents answering to requests sent before Ciao Core is really up and running
-def flush_terminal(fd):
-	termios.tcflush(fd, termios.TCIOFLUSH)
-
 # setup logger
 def get_logger(logname):
-	
+
 	logger = logging.getLogger(logname)
 	logger.setLevel(settings.conf['log']['level'])
 
@@ -69,15 +54,6 @@ def get_logger(logname):
 	logger.addHandler(handler)
 
 	return logger
-
-# useful function to print out result (to MCU)
-def out(status, message, data = None):
-	output = [ str(status), str(message) ]
-	if not data is None:
-		data = serialize(data)
-		output.append(data.tostring())
-	#4 (ASCII) means end trasmit (like newline but via a non-printable char)
-	os.write(sys.stdout.fileno(), ";".join(output)+ chr(4))
 
 #COMMAND FUNCTIONS
 def clean_command(command):
@@ -100,10 +76,10 @@ def serialize(data):
 			entries.append(escape(e))
 	elif isinstance(data, dict):
 		for k, v in data.items():
-			entries.append(settings.keyvalue_separator.join([escape(k), escape(v)]))
+			entries.append(settings.KV_SEP_CODE.join([escape(k), escape(v)]))
 	else:
 		entries.append(escape(data))
-	s.fromstring(settings.entry_separator.join(entries))
+	s.fromstring(settings.ENTRY_SEP_CODE.join(entries))
 	return s
 
 # unserialize passed dict/list, atm it works only for one level object not nested ones
@@ -118,11 +94,11 @@ def unserialize(source, from_array = True):
 
 	#identifying data type
 	try:
-		index = data.index(ord(settings.keyvalue_separator))
+		index = data.index(ord(settings.KV_SEP_CODE))
 		result = {}
 	except ValueError, e:
 		try:
-			index = data.index(ord(settings.entry_separator))
+			index = data.index(ord(settings.ENTRY_SEP_CODE))
 			result = []
 		except ValueError, e:
 			result = []
@@ -136,10 +112,10 @@ def unserialize(source, from_array = True):
 		while count < size:
 			pick = data.pop(0)
 			count +=1
-			if pick == ord(settings.keyvalue_separator):
+			if pick == ord(settings.KV_SEP_CODE):
 				param_index = 1
 				params[param_index] = ""
-			elif pick == ord(settings.entry_separator):
+			elif pick == ord(settings.ENTRY_SEP_CODE):
 				result[escape(params[0], False)] = escape(params[1], False)
 				param_index = 0
 				params = ["", ""]
@@ -152,7 +128,7 @@ def unserialize(source, from_array = True):
 		while count < size:
 			pick = data.pop(0)
 			count +=1
-			if pick == ord(settings.entry_separator):
+			if pick == ord(settings.ENTRY_SEP_CODE):
 				result.append(escape(entry, False))
 				entry = ""
 			else:
@@ -172,3 +148,60 @@ def get_checksum(msg, is_unique = True):
 	if not is_unique:
 		msg = str(time.time()) + msg
 	return hashlib.md5(msg.encode('unicode-escape')).hexdigest()
+
+# get the board name/model
+def get_board_model():
+	import subprocess
+	return subprocess.check_output(['awk','''/machine/ {print $3,$4}''','/proc/cpuinfo']).strip('\n').upper()
+
+# check version
+
+def check_version(core_req_ver_num, core_ver_num):
+	global logger
+	operator = re.sub("[0-9.]", "", core_req_ver_num) #get operators
+	core_req_ver_num = re.sub("[^0-9.]", "", core_req_ver_num) #get numbers
+	#core_ver_num > core_req_ver_num => 1
+	#core_ver_num = core_req_ver_num => 0
+	#core_ver_num < core_req_ver_num => -1
+	comp = __compare(core_ver_num, core_req_ver_num)
+	#logger.info("VERSION CORE REQUIRED: %s - OPERATOR: %s - VERSION CORE CURRENT %s" % (core_req_ver_num, operator, core_ver_num))
+
+	if operator == "=":
+		if comp == 0:
+			return True
+		else:
+			return False
+	elif operator == ">":
+		if comp == 1:
+			return True
+		else:
+			return False
+	elif operator == "<":
+		if comp == -1:
+			return True
+		else:
+			return False
+	elif operator == ">=":
+		if comp >= 0:
+			return True
+		else:
+			return False
+	elif operator == "<=":
+		if comp <= 0:
+			return True
+		else:
+			return False
+
+def __compare(v1, v2):
+	def normalize(v):
+		return [int(x) for x in re.sub(r'(\.0+)*$','', v).split(".")]
+	return cmp(normalize(v1), normalize(v2))
+
+def kill_connectors_by_pids():
+	import fnmatch
+	for ciaofile in os.listdir('/var/run/'):
+		if fnmatch.fnmatch(ciaofile, '*ciao.pid'):
+			cf = open('/var/run/'+ciaofile, "r")
+			pid = cf.readline()
+			os.system("kill -9 " + pid)
+			os.remove(cf.name)

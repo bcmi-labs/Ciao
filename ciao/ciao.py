@@ -7,10 +7,10 @@
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -18,24 +18,29 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-# 
+#
 # Copyright 2015 Arduino Srl (http://www.arduino.org/)
-# 
+#
 # authors:
 # _giuseppe[at]arduino[dot]org
 #
+# edited 06 Apr 2016 by sergio@arduino.org
+# edited 18 Apr 2016 by andrea@arduino.org
+#
 ###
 
-import io, os, sys, signal
+import io, os
+#import sys,
+import signal, re
 import logging, json
 from threading import Thread
 import time
-import atexit
+#import atexit
 
 import settings
 from utils import *
 from ciaoconnector import CiaoConnector
-import ciaoserver
+import ciaoserver, ciaomcu
 
 #function to handle OS signals
 def signal_handler(signum, frame):
@@ -43,6 +48,12 @@ def signal_handler(signum, frame):
 	global keepcycling
 	logger.info("Received signal %d" % signum)
 	keepcycling = False
+
+def __kill_connectors():
+	#stopping connectors (managed)
+	for name, connector in shd.items():
+		logger.info("Sending stop signal to %s" % name)
+		connector.stop()
 
 #opening logfile
 logger = get_logger("ciao")
@@ -58,21 +69,63 @@ if not "connectors" in settings.conf or len(settings.conf["connectors"]) == 0:
 #creating shared dictionary
 shd = {}
 
+#get the board model from cpuinfo
+board_model = get_board_model()
+
+#kill previous connectors
+kill_connectors_by_pids()
+
 #start ciaoserver thread (to interact with connectors)
 server = Thread(name="server", target=ciaoserver.init, args=(settings.conf,shd,))
 server.daemon = True
 server.start()
 
-#we start MANAGED connectors after ciaoserver (so they can register properly)
-for connector, connector_conf in settings.conf['connectors'].items():
-	shd[connector] = CiaoConnector(connector, connector_conf)
+mcu = None
 
-	# connector must start after it has been added to shd,
-	# it can register only if listed in shd
-	shd[connector].start()
+if board_model == "ARDUINO YUN" or board_model == "ARDUINO YUN-MINI" or board_model == "ARDUINO CHIWAWA" or board_model == "LININO ONE":
+	logger.debug("Ciao MCU Connection starting via standard output")
+	mcu = ciaomcu.StdIO(settings, logger)
+	mcu.start()
+	logger.info("Ciao MCU Connection started via standard output")
+
+elif board_model == "ARDUINO TIAN":
+	logger.debug("Ciao MCU Connection starting via serial")
+	baud = settings.conf["tian"]["baud"]
+	port = settings.conf["tian"]["port"]
+	mcu = ciaomcu.Serial(port, baud, logger)
+	mcu.start()
+	logger.info("Ciao MCU Connection started via serial")
+
+#we start MANAGED connectors after ciaoserver (so they can register properly)
+core_version = settings.conf["core"]
+
+for connector, connector_conf in settings.conf['connectors'].items():
+	#core_version = settings.conf["core"]
+	required_version = connector_conf['core'] if "core" in connector_conf else ">=0.0.0"
+
+	if not ( check_version(required_version, core_version) ):
+		logger.error("Required version of Ciao Core [%s] for the connector %s is not compatible with the working Core version [%s]" %(required_version, connector, core_version ))
+	else:
+		shd[connector] = CiaoConnector(connector, connector_conf, mcu)
+		# connector must start after it has been added to shd,
+		# it can register only if listed in shd
+		shd[connector].start()
+		#__attach_connector(connector)
+
+'''
+def __attach_connector(connector_name):
+	connector_conf = settings.conf['connectors'][connector_name]
+	required_version = connector_conf['core'] if "core" in connector_conf else ">=0.0.0"
+
+	if not ( check_version(required_version, core_version) ):
+		logger.error("Required version of Ciao Core [%s] for the connector %s is not compatible with the working Core version [%s]" %(required_version, connector, core_version ))
+	else:
+		shd[connector_name] = CiaoConnector(connector_name, connector_conf, mcu)
+		shd[connector_name].start()
+'''
 
 #TODO: maybe we can start another thread to control Ciao Core status
-
+#logger.warning(shd)
 #variable to "mantain control" over while loop
 keepcycling = True
 
@@ -81,60 +134,57 @@ signal.signal(signal.SIGINT, signal_handler) #ctrl+c
 signal.signal(signal.SIGHUP, signal_handler) #SIGHUP - 1
 signal.signal(signal.SIGTERM, signal_handler) #SIGTERM - 15
 
-#acquiring stream for receiving/sending command from MCU
-if settings.use_fakestdin:
-	print "Starting Ciao in DEBUG MODE"
-	logger.debug("Starting Ciao in DEBUG MODE")
-
-	handle = io.open(settings.basepath + "fake.stdin", "r+b")
-else:
-	#disable echo on terminal 
-	enable_echo(sys.stdin, False)
-
-	#allow terminal echo to be enabled back when ciao exits
-	atexit.register(enable_echo, sys.stdin.fileno(), True)
-	handle = io.open(sys.stdin.fileno(), "rb")
-	flush_terminal(sys.stdin)
+# Before start reading from micro controller, flushes data and cleans the buffer.
+# Usually mcu starts to write into buffer before ciao begins to read.
+mcu.flush()
 
 while keepcycling:
 	try:
-		#reading from input device
-		cmd = clean_command(handle.readline())
+		cmd = clean_command(mcu.read())
 	except KeyboardInterrupt, e:
 		logger.warning("SIGINT received")
 	except IOError, e:
-		logger.warning("Interrupted system call")
+		logger.warning("Interrupted system call: %s" %e)
 	else:
 		if cmd:
-			logger.debug("%s" % cmd)
+			logger.debug("command: %s" % cmd)
 			connector, action = is_valid_command(cmd)
 			if connector == False:
-				logger.warning("unknown command: %s" % cmd)
-				out(-1, "unknown_command")
+				if cmd != "run-ciao":
+					logger.warning("unknow command: %s" % cmd)
+					mcu.write(-1, "unknown_command")
+				# else : in this case ciao.py received run-ciao and it must discard the commands
 			elif connector == "ciao": #internal commands
 				params = cmd.split(";",2)
 				if len(params) != 3:
-					out(-1, "unknown_command")
+					mcu.write(-1, "unknown_command")
 					continue
 				if action == "r" and params[2] == "status": #read status
-					out(1, "running")
+					mcu.write(1, "running")
 				elif action == "w" and params[2] == "quit": #stop ciao
-					out(1, "done")
+					mcu.write(1, "done")
 					keepcycling = False
+					__kill_connectors()
 			elif not connector in settings.conf['connectors']:
 				logger.warning("unknown connector: %s" % cmd)
-				out(-1, "unknown_connector")
+				mcu.write(-1, "unknown_connector")
+			elif not connector in shd:
+				logger.warning("connector not runnable: %s" % cmd)
+				mcu.write(-1, "connector_not_runnable")
 			else:
 				shd[connector].run(action, cmd)
+				'''
+				if not connector in shd:
+					__attach_connector(connector)
+					mcu.write(0, "no_connector")
+				else:
+					shd[connector].run(action, cmd)
+				'''
+
 
 		# the sleep is really useful to prevent ciao to "cap" all CPU
 		# this could be increased/decreased (keep an eye on CPU usage)
 		time.sleep(0.01)
-
-#stopping connectors (managed)
-for name, connector in shd.items():
-	logger.info("Sending stop signal to %s" % name)
-	connector.stop()
 
 logger.info("Exiting")
 sys.exit(0)

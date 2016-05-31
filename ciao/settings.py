@@ -6,10 +6,10 @@
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -17,9 +17,9 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-# 
+#
 # Copyright 2015 Arduino Srl (http://www.arduino.org/)
-# 
+#
 # authors:
 # _giuseppe[at]arduino[dot]org
 #
@@ -32,6 +32,7 @@ basepath = os.path.dirname(os.path.abspath(__file__)) + os.sep
 
 #configuration dictionary
 conf = {
+	"core" : "0.1.0",
 	"server": {
 		"host" : "localhost",
 		"port" : 8900
@@ -47,6 +48,10 @@ conf = {
 		"format" : "%(asctime)s %(levelname)s %(name)s - %(message)s",
 		"maxSize" : 0.1 , # maxSize is expressed in MBytes
 		"maxRotate" : 5 # maxRotate expresses how much time logfile has to be rotated before deletion
+	},
+	"tian": {
+		"baud" : 4000000,
+		"port" : "/dev/ttySAMD"
 	}
 }
 
@@ -58,17 +63,44 @@ actions_map = {
 }
 
 #this is the number of default params the MCU will pass to Ciao
-base_params = { 
+base_params = {
 	"read" : 2, # connector_name + action
 	"write" : 2, # connector_name + action
 	"writeresponse" : 3, # connector_name + action + checksum
 }
 
+
+# ASCII code Group Separator but sed as alias/substitution for New Line character
+NL_CODE = chr(29) #(non-printable char)
+NL = "\n"
+
+# ASCII code for File Separator but sed as alias/substitution for Carriage Return
+CR_CODE = chr(28) #(non-printable char)
+CR = "\r"
+
+# ASCII code for End of Medium but sed as alias/substitution for Tabs
+TAB_CODE = chr(25) #(non-printable char)
+TAB = "\t"
+
+# ASCII code for Negative Acknowledgement - Used to separate arguments.
+# Usually Ciao write, read and CiaoData have only 3/4 arguments and sometimes
+# are not enough. Put all togheter the arguments and separate it with this char code.
+ARGS_SEP_CODE = chr(21)
+
+# ASCII code for Record Separator
+ENTRY_SEP_CODE = chr(30) #(non-printable char)
+
+# ASCII code for Unit Separator (non-printable char)
+KV_SEP_CODE = chr(31) #(non-printable char)
+
+
+'''
 #serialization settings
 # ASCII code for GroupSeparator (non-printable char)
 entry_separator = chr(30)
 # ASCII code for UnitSeparator (non-printable char)
 keyvalue_separator = chr(31)
+'''
 
 #enable/disable fake.stdin - FOR TESTING PURPOSE
 # atm this params has to be set to True only
@@ -109,7 +141,7 @@ def load_connectors(logger):
 	else:
 		conf['connectors'] = {}
 		for conf_file in conf_list:
-			if conf_file.endswith(".json.conf"):
+			if conf_file.endswith("ciao.json.conf"):
 				try:
 					conf_json = open(conf_path + conf_file).read()
 					conf_plain = json.loads(conf_json)
@@ -117,7 +149,7 @@ def load_connectors(logger):
 						connector_name = conf_plain['name']
 					else:
 						logger.debug("Missing connector name in configuration file(%s)" % conf_file)
-						connector_name = conf_file[:-len(".json.conf")]		
+						connector_name = conf_file[:-len(".ciao.json.conf")]
 					if "enabled" in conf_plain and conf_plain['enabled']:
 						conf['connectors'][connector_name] = conf_plain
 						logger.debug("Loaded configuration for %s connector" % connector_name)

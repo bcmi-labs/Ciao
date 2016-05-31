@@ -6,10 +6,10 @@
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -17,9 +17,9 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-# 
+#
 # Copyright 2015 Arduino Srl (http://www.arduino.org/)
-# 
+#
 # authors:
 # _giuseppe[at]arduino[dot]org
 #
@@ -33,12 +33,12 @@ import settings
 from utils import *
 
 class CiaoConnector(object):
-	def __init__(self, name, conf, registered = False):
+	def __init__(self, name, conf, mcu_connection, registered = False,):
 		self.name = name
 		self.registered = registered
 		self.logger = logging.getLogger("ciao.connector." + self.name)
 		self.load_conf(conf)
-
+		self.mcu = mcu_connection
 		#interactions stash
 		self.stash = {}
 
@@ -108,7 +108,7 @@ class CiaoConnector(object):
 		if destination == "result":
 			if checksum in self.stash:
 				self.stash[checksum]['result'] = element
-			else:	
+			else:
 				self.logger.warning("Obtaining result %s for missing checksum (%s)" % (element, checksum))
 		else:
 			self.stash[checksum] = element
@@ -121,7 +121,7 @@ class CiaoConnector(object):
 	def get_result(self, checksum, auto_delete=True):
 		result = self.stash[checksum]["result"]
 		if auto_delete:
-			del self.stash[checksum] 
+			del self.stash[checksum]
 		return result
 
 	def run(self, short_action, command):
@@ -131,17 +131,17 @@ class CiaoConnector(object):
 
 		if not self.is_registered():
 			self.logger.warning("Connector %s not yet registered" % self.name)
-			out(0, "no_connector")
+			self.mcu.write(0, "no_connector")
 		elif not action in self.implements:
 			self.logger.warning("Connector %s does not implement %s" % (self.name, action))
-			out(0, "no_action")
+			self.mcu.write(0, "no_action")
 		else:
 			required_params = settings.base_params[action]
 			if not "has_params" in self.implements[action] or not self.implements[action]['has_params']:
 				required_params -= 1
 
 			#split has a "weird" behavior, the number passed (required_params) indicates
-			#the count of matches of the character should be found (i.e. 2 will split the string in three parts)			
+			#the count of matches of the character should be found (i.e. 2 will split the string in three parts)
 			params = command.split(";", required_params)
 			#TODO
 			# after split we could check if len(params) match expected required_params value
@@ -150,9 +150,9 @@ class CiaoConnector(object):
 			if self.implements[action]['direction'] == 'in':
 				pos, entry = self.stash_get("in")
 				if pos:
-					out(1, pos, entry["data"])
+					self.mcu.write(1, pos, entry["data"])
 				else:
-					out(0, "no_message")
+					self.mcu.write(0, "no_message")
 
 			#action from MCU to the "world"
 			elif self.implements[action]['direction'] == 'out':
@@ -174,25 +174,25 @@ class CiaoConnector(object):
 						"data": data
 					}
 				self.stash_put("out", checksum, result)
-				out(1, "done")
+				self.mcu.write(1, "done")
 
 			#action is a request from MCU aiming to get a result
 			elif self.implements[action]['direction'] == 'result':
 				message = params[required_params]
 				checksum = get_checksum(message)
 				if not checksum in self.stash:
-					result = { 
+					result = {
 						"type": "result",
 						"data": unserialize(message, False),
 						"checksum": checksum
 					}
 					self.stash_put("out", checksum, result)
-					out(0, "no_result")
+					self.mcu.write(0, "no_result")
 				elif self.has_result(checksum):
 					self.logger.debug("providing result for request %s" % checksum)
-					out(1, checksum, self.get_result(checksum))
+					self.mcu.write(1, checksum, self.get_result(checksum))
 				else:
-					out(0, "no_result")
+					self.mcu.write(0, "no_result")
 			else:
 				self.logger.warning("unknown behaviour action: %s" % action)
-				out(0, "no_match")
+				self.mcu.write(0, "no_match")
