@@ -45,14 +45,18 @@ class HTTPServer(BaseHTTPServer.BaseHTTPRequestHandler):
 		request = self.path[1:]  		# remove "/" from self.path (ex: from /arduino/digital/13/1 to arduino/digital/13/1)
 		if '/' in request:
  			service = request[:request.index('/')] # parse the service (ex: arduino )
+			logger.info(request)
 			if "arduino" in service:
 			 	message = request[request.index('/')+1:] # parse the command to MCU (ex: digital/13/1)
 				mcu_response = {"data": message}
 				ciao_connector.send(mcu_response)
-				mcu_request = ciao_connector.receive()
 				reply = ""
-				if mcu_request['type'] == "response":
-					reply = str(mcu_request['data'][0])
+				try:
+					mcu_request = ciao_connector.receive(timeout = restserver_timeout)
+					if mcu_request['type'] == "response":
+						reply = str(mcu_request['data'][0])
+				except:
+					reply = "timeout"
 				self.wfile.write(reply+'\r\n')
 			else:
 				self.wfile.write("No such file or directory")
@@ -70,7 +74,7 @@ def restserver_handler(conn, config,logger):
 	if message != "" :
 	 	mcu_response = {"data" : [str(message).rstrip('\r\n')]}
 	 	ciao_connector.send(mcu_response)
-		mcu_request = ciao_connector.receive()
+		mcu_request = ciao_connector.receive(timeout = restserver_timeout)
 		if mcu_request['type'] == "response":
 		 	reply = str(mcu_request['data'][0])
 	conn.send(reply+'\r\n')
@@ -98,29 +102,23 @@ def internal_httpserver_connect()	:
 	except Exception, e:
 		s.close()
 		logger.info("Exception while creating REST server: %s" % e)
-		sys.exit(1)
+		#sys.exit(1)
 
 	else:
 		s.close()
 		logger.info("REST server connector is closing")
-		sys.exit(0)
+		#sys.exit(0)
 
 def httpserver_connect()	:
-	try:
-		httpserver_address = ('', restserver_port)
-		httpserver = BaseHTTPServer.HTTPServer(httpserver_address, HTTPServer)
-		logger.info("REST server connector started")
-		while True:
+	httpserver_address = ('', restserver_port)
+	httpserver = BaseHTTPServer.HTTPServer(httpserver_address, HTTPServer)
+	logger.info("REST server connector started")
+	while True:
+		try:
 			httpserver.handle_request()
-		httpserver.server_close()
-
-	except Exception, e:
-		logger.info("Exception while creating REST server: %s" % e)
-		sys.exit(1)
-
-	else:
-		logger.info("REST server connector is closing")
-		sys.exit(0)
+		except Exception, e:
+			logger.error("Exception while creating REST server: %s" % e)
+	httpserver.server_close()
 
 # the absolute path of the connector
 working_dir = os.path.dirname(os.path.abspath(__file__)) + os.sep
@@ -130,6 +128,8 @@ working_dir = os.path.dirname(os.path.abspath(__file__)) + os.sep
 # load configuration object with configuration file restserver.conf.json
 config = ciao.load_config(working_dir)
 restserver_port = config["params"]["port"] if "port" in config["params"] else 80
+restserver_timeout = config["params"]["timeout"] if "timeout" in config["params"] and not config["params"]["timeout"] == 0 else None
+
 # name of the connector
 name = config["name"]
 
