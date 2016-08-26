@@ -40,6 +40,8 @@ class HTTPServer(BaseHTTPServer.BaseHTTPRequestHandler):
 		# Response to a GET request
 		self.send_response(200)
 		self.send_header("Content-type", "text/plain")
+		if restserver_access_control_allow_origin:
+			self.send_header("Access-Control-Allow-Origin", restserver_access_control_allow_origin)
 		self.end_headers()
 
 		request = self.path[1:]  		# remove "/" from self.path (ex: from /arduino/digital/13/1 to arduino/digital/13/1)
@@ -128,6 +130,7 @@ working_dir = os.path.dirname(os.path.abspath(__file__)) + os.sep
 config = ciao.load_config(working_dir)
 restserver_port = config["params"]["port"] if "port" in config["params"] else 80
 restserver_timeout = config["params"]["timeout"] if "timeout" in config["params"] and not config["params"]["timeout"] == 0 else None
+restserver_access_control_allow_origin = config["params"]["access_control_allow_origin"] if "access_control_allow_origin" in config["params"] and not config["params"]["access_control_allow_origin"].strip() == "" else None
 
 # name of the connector
 name = config["name"]
